@@ -23,7 +23,6 @@ WORKDIR /app
 COPY --from=deps /app /app
 COPY . .
 RUN pnpm --filter @paperclipai/ui build
-RUN pnpm --filter @paperclipai/server build
 
 FROM base AS production
 WORKDIR /app
@@ -44,4 +43,4 @@ ENV NODE_ENV=production \
 VOLUME ["/paperclip"]
 EXPOSE 3100
 
-CMD ["node", "--import", "./server/node_modules/tsx/dist/loader.mjs", "server/dist/index.js"]
+CMD ["node", "--import", "./server/node_modules/tsx/dist/loader.mjs", "server/src/index.ts"]
