@@ -108,22 +108,58 @@ function parseStdoutChunk(
   pendingByRun.set(pendingKey, split.pop() ?? "");
   const adapter = getUIAdapter(run.adapterType);
 
+  const summarized: Array<{ text: string; tone: FeedTone; thinkingDelta?: boolean; assistantDelta?: boolean }> = [];
+  const appendSummary = (entry: TranscriptEntry) => {
+    if (entry.kind === "assistant" && entry.delta) {
+      const text = entry.text;
+      if (!text.trim()) return;
+      const last = summarized[summarized.length - 1];
+      if (last && last.assistantDelta) {
+        last.text += text;
+      } else {
+        summarized.push({ text, tone: "assistant", assistantDelta: true });
+      }
+      return;
+    }
+
+    if (entry.kind === "thinking" && entry.delta) {
+      const text = entry.text;
+      if (!text.trim()) return;
+      const last = summarized[summarized.length - 1];
+      if (last && last.thinkingDelta) {
+        last.text += text;
+      } else {
+        summarized.push({ text: `[thinking] ${text}`, tone: "info", thinkingDelta: true });
+      }
+      return;
+    }
+
+    const summary = summarizeEntry(entry);
+    if (!summary) return;
+    summarized.push({ text: summary.text, tone: summary.tone });
+  };
+
   const items: FeedItem[] = [];
   for (const line of split.slice(-8)) {
     const trimmed = line.trim();
     if (!trimmed) continue;
     const parsed = adapter.parseStdoutLine(trimmed, ts);
     if (parsed.length === 0) {
+      if (run.adapterType === "openclaw") {
+        continue;
+      }
       const fallback = createFeedItem(run, ts, trimmed, "info", nextIdRef.current++);
       if (fallback) items.push(fallback);
       continue;
     }
     for (const entry of parsed) {
-      const summary = summarizeEntry(entry);
-      if (!summary) continue;
-      const item = createFeedItem(run, ts, summary.text, summary.tone, nextIdRef.current++);
-      if (item) items.push(item);
+      appendSummary(entry);
     }
+  }
+
+  for (const summary of summarized) {
+    const item = createFeedItem(run, ts, summary.text, summary.tone, nextIdRef.current++);
+    if (item) items.push(item);
   }
 
   return items;
